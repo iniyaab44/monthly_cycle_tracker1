@@ -19,24 +19,21 @@ const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_for_dev";
 const PORT = Number(process.env.PORT) || 3000;
 
 // Supabase Setup with defensive checks
-const supabaseUrl = process.env.SUPABASE_URL || "";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "";
+const supabaseUrl = (process.env.SUPABASE_URL || "").trim().replace(/\/$/, "");
+const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
 
 let supabase: any = null;
 
 if (supabaseUrl && supabaseKey) {
   try {
-    // Basic validation to prevent createClient from throwing on invalid strings
     if (supabaseUrl.startsWith('http')) {
       supabase = createClient(supabaseUrl, supabaseKey);
     } else {
-      console.error("CRITICAL: SUPABASE_URL does not appear to be a valid URL. It must start with http/https.");
+      console.error("CRITICAL: SUPABASE_URL must start with http/https. Current value starts with:", supabaseUrl.substring(0, 5));
     }
   } catch (err) {
     console.error("CRITICAL: Failed to initialize Supabase client:", err);
   }
-} else {
-  console.error("CRITICAL: Missing Supabase environment variables (SUPABASE_URL, SUPABASE_ANON_KEY/SUPABASE_SERVICE_ROLE_KEY)");
 }
 
 const app = express();
@@ -45,12 +42,61 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Request Logging
-app.use((req, res, next) => {
-  if (process.env.NODE_ENV !== "production") {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+// --- API Routes ---
+
+// Health Check (Enhanced for debugging)
+app.get("/api/health", async (req, res) => {
+  const debugInfo = {
+    timestamp: new Date().toISOString(),
+    env: {
+      hasSupabaseUrl: !!process.env.SUPABASE_URL,
+      supabaseUrlLength: process.env.SUPABASE_URL?.length || 0,
+      supabaseUrlPrefix: process.env.SUPABASE_URL?.substring(0, 8),
+      hasSupabaseAnonKey: !!process.env.SUPABASE_ANON_KEY,
+      hasSupabaseServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      hasJwtSecret: !!process.env.JWT_SECRET,
+      nodeEnv: process.env.NODE_ENV,
+      isVercel: !!process.env.VERCEL
+    },
+    supabaseInitialized: !!supabase
+  };
+
+  try {
+    if (!supabase) {
+      return res.json({ 
+        status: "error", 
+        database: "not_initialized", 
+        message: "Supabase client failed to initialize. Check if SUPABASE_URL starts with https://",
+        debug: debugInfo
+      });
+    }
+    
+    // Test the connection with a timeout
+    const { error } = await supabase.from('users').select('id').limit(1);
+    
+    if (error) {
+      return res.json({ 
+        status: "warn", 
+        database: "error", 
+        message: error.message,
+        code: error.code,
+        debug: debugInfo 
+      });
+    }
+    
+    res.json({ 
+      status: "ok", 
+      database: "connected",
+      debug: debugInfo
+    });
+  } catch (e: any) {
+    res.status(500).json({ 
+      status: "error", 
+      database: "exception", 
+      message: e.message,
+      debug: debugInfo
+    });
   }
-  next();
 });
 
 // Middleware to ensure Supabase is initialized
@@ -63,28 +109,6 @@ const ensureSupabase = (req: any, res: any, next: any) => {
   }
   next();
 };
-
-// --- API Routes ---
-
-// Health Check (Minimal dependencies)
-app.get("/api/health", async (req, res) => {
-  try {
-    if (!supabase) {
-      return res.json({ 
-        status: "error", 
-        database: "missing_config", 
-        message: "SUPABASE_URL or SUPABASE_KEY is missing. Add them to Vercel Environment Variables." 
-      });
-    }
-    const { error } = await supabase.from('users').select('id').limit(1);
-    if (error && error.code !== 'PGRST116') {
-      return res.json({ status: "warn", database: "error", message: error.message });
-    }
-    res.json({ status: "ok", database: "connected" });
-  } catch (e: any) {
-    res.json({ status: "error", database: "exception", message: e.message });
-  }
-});
 
 // Auth Routes
 app.post("/api/auth/register", ensureSupabase, async (req, res) => {
