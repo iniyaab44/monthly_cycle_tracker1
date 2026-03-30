@@ -62,6 +62,8 @@ export default function Dashboard() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profileFormData, setProfileFormData] = useState({
     email: user?.email || '',
+    name: user?.name || '',
+    username: user?.username || '',
     password: '',
   });
   const [showProfilePassword, setShowProfilePassword] = useState(false);
@@ -129,7 +131,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user) {
-      setProfileFormData(prev => ({ ...prev, email: user.email }));
+      setProfileFormData(prev => ({ 
+        ...prev, 
+        email: user.email,
+        name: user.name || '',
+        username: user.username || ''
+      }));
     }
   }, [user]);
 
@@ -669,6 +676,30 @@ export default function Dashboard() {
                     {profileError}
                   </div>
                 )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block font-black uppercase text-sm mb-2">Full Name</label>
+                    <input 
+                      type="text" 
+                      required
+                      className="neubrutalism-input w-full"
+                      value={profileFormData.name}
+                      onChange={(e) => setProfileFormData({ ...profileFormData, name: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-black uppercase text-sm mb-2">Username</label>
+                    <input 
+                      type="text" 
+                      required
+                      className="neubrutalism-input w-full"
+                      value={profileFormData.username}
+                      onChange={(e) => setProfileFormData({ ...profileFormData, username: e.target.value })}
+                    />
+                  </div>
+                </div>
 
                 <div>
                   <label className="block font-black uppercase text-sm mb-2">Email Address</label>

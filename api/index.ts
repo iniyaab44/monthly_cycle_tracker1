@@ -142,7 +142,7 @@ app.delete("/api/logs/:id", authenticateToken, async (req: any, res) => {
 });
 
 app.put("/api/user/profile", authenticateToken, async (req: any, res) => {
-  const { email, password } = req.body;
+  const { email, password, name, username } = req.body;
   const updates: any = {};
   
   if (email) {
@@ -158,6 +158,25 @@ app.put("/api/user/profile", authenticateToken, async (req: any, res) => {
       return res.status(400).json({ error: "Email already in use" });
     }
     updates.email = email;
+  }
+
+  if (username) {
+    // Check if username is already taken by another user
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('username', username)
+      .neq('id', req.user.id)
+      .single();
+
+    if (existingUser) {
+      return res.status(400).json({ error: "Username already in use" });
+    }
+    updates.username = username;
+  }
+
+  if (name) {
+    updates.name = name;
   }
 
   if (password) {
