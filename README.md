@@ -1,11 +1,16 @@
-<div align="center">
+# Monthly Cycle 🌻
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Monthly Cycle is a bold, neubrutalist wellness companion designed to help users track their menstrual cycles and pill intake with clarity and style.
 
-  <h1>Built with AI Studio</h2>
+## Project Overview
+This application provides a comprehensive dashboard for managing personal health data. It combines a high-contrast visual aesthetic with practical tools for long-term health monitoring.
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+### Core Features
+- **Interactive Calendar**: Log daily status (Period, Pill, or Free) with ease.
+- **Monthly Analytics**: Visualize your cycle trends with dynamic bar charts.
+- **Data Export**: Generate professional PDF or Excel reports for specific date ranges.
+- **Profile Management**: Securely update your email and password.
+- **Real-time Sync**: Powered by Supabase for reliable data storage and retrieval.
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
-
-</div>
+## Design Philosophy
+The project embraces **Neubrutalism**—a design style characterized by raw, unpolished elements, thick black borders, vibrant colors, and high-contrast typography. This ensures that your health data is not just organized, but also visually engaging.
