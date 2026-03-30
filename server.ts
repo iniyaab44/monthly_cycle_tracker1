@@ -51,12 +51,12 @@ async function startServer() {
   });
 
   app.post("/api/auth/login", async (req, res) => {
-    const { email, password } = req.body;
+    const { identifier, password } = req.body;
     
     const { data: user, error } = await supabase
       .from('users')
       .select('*')
-      .eq('email', email)
+      .or(`email.eq.${identifier},username.eq.${identifier}`)
       .single();
 
     if (error || !user || !(await bcrypt.compare(password, user.password))) {

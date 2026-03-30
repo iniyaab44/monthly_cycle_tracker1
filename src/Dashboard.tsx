@@ -58,6 +58,7 @@ export default function Dashboard() {
   const [dbStatus, setDbStatus] = useState<'connected' | 'disconnected'>('connected');
 
   // Profile Modal State
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profileFormData, setProfileFormData] = useState({
     email: user?.email || '',
@@ -68,6 +69,7 @@ export default function Dashboard() {
   const [profileLoading, setProfileLoading] = useState(false);
 
   // Download Modal State
+  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [downloadType, setDownloadType] = useState<'PDF' | 'EXCEL'>('PDF');
   const [range, setRange] = useState({
@@ -94,6 +96,22 @@ export default function Dashboard() {
 
   const years = Array.from({ length: 10 }, (_, i) => (new Date().getFullYear() - 5 + i).toString());
 
+  const fetchJson = async (url: string, options: RequestInit = {}) => {
+    const res = await fetch(url, options);
+    const contentType = res.headers.get('content-type');
+    
+    if (contentType && contentType.includes('application/json')) {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Server error: ${res.status}`);
+      return data;
+    } else {
+      const text = await res.text();
+      console.error('Non-JSON response from', url, ':', text);
+      if (!res.ok) throw new Error(`Server error: ${res.status} ${res.statusText}. Please check if the API routes are correctly configured.`);
+      return text;
+    }
+  };
+
   // Form State
   const [formData, setFormData] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
@@ -117,8 +135,7 @@ export default function Dashboard() {
 
   const checkHealth = async () => {
     try {
-      const res = await fetch('/api/health');
-      const data = await res.json();
+      const data = await fetchJson('/api/health');
       setDbStatus(data.database);
     } catch (e) {
       setDbStatus('disconnected');
@@ -127,17 +144,11 @@ export default function Dashboard() {
 
   const fetchLogs = async () => {
     try {
-      const res = await fetch('/api/logs', {
+      const data = await fetchJson('/api/logs', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const data = await res.json();
-        console.log('Fetched logs:', data.length);
-        setLogs(data);
-      } else {
-        const error = await res.json();
-        console.error('Failed to fetch logs:', error);
-      }
+      console.log('Fetched logs:', data.length);
+      setLogs(data);
     } catch (err) {
       console.error('Error fetching logs:', err);
     }
@@ -156,16 +167,16 @@ export default function Dashboard() {
     const url = editingLog ? `/api/logs/${editingLog.id}` : '/api/logs';
     const method = editingLog ? 'PUT' : 'POST';
 
-    const res = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
+    try {
+      await fetchJson(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-    if (res.ok) {
       fetchLogs();
       setIsModalOpen(false);
       setEditingLog(null);
@@ -177,15 +188,21 @@ export default function Dashboard() {
         ampm: 'AM',
         description: '',
       });
+    } catch (err) {
+      console.error('Error saving log:', err);
     }
   };
 
   const handleDeleteLog = async (id: number) => {
-    const res = await fetch(`/api/logs/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) fetchLogs();
+    try {
+      await fetchJson(`/api/logs/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      fetchLogs();
+    } catch (err) {
+      console.error('Error deleting log:', err);
+    }
   };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
@@ -194,7 +211,7 @@ export default function Dashboard() {
     setProfileLoading(true);
 
     try {
-      const res = await fetch('/api/user/profile', {
+      const data = await fetchJson('/api/user/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -202,12 +219,6 @@ export default function Dashboard() {
         },
         body: JSON.stringify(profileFormData),
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to update profile');
-      }
 
       updateUser(data.user);
       setIsProfileModalOpen(false);
@@ -432,36 +443,58 @@ export default function Dashboard() {
             <p className="text-lg md:text-xl font-bold opacity-70">Your neubrutalist wellness companion.</p>
           </div>
           {user && (
-            <div className="flex items-center gap-4">
-              <div className="text-right hidden md:block">
-                <p className="text-2xl font-black uppercase leading-none">Welcome, {user.name || user.email}!</p>
+            <div className="flex flex-col md:flex-row items-center gap-4">
+              <div className="text-center md:text-right">
+                <p className="text-xl md:text-2xl font-black uppercase leading-none">Welcome, {user.name || user.email}!</p>
                 <p className="text-sm font-bold opacity-50">@{user.username || 'user'}</p>
               </div>
-              <div className="relative group">
-                <button 
-                  className="neubrutalism-button p-3 bg-white hover:bg-sandel transition-colors"
-                  title="Account Settings"
-                >
-                  <UserIcon size={24} />
-                </button>
-                <div className="absolute right-0 top-full mt-2 hidden group-hover:block z-50 bg-white border-4 border-black w-48 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-                  <div className="p-4 border-b-4 border-black md:hidden">
-                    <p className="font-black uppercase text-sm truncate">{user.name || user.email}</p>
-                    <p className="text-xs font-bold opacity-50">@{user.username || 'user'}</p>
-                  </div>
+              <div className="relative">
+                <div className="flex justify-center">
                   <button 
-                    onClick={() => setIsProfileModalOpen(true)}
-                    className="w-full text-left p-3 hover:bg-gray-100 font-black uppercase text-sm border-b-4 border-black flex items-center gap-2"
+                    onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                    className={`neubrutalism-button p-3 transition-colors ${isProfileMenuOpen ? 'bg-sandel' : 'bg-white hover:bg-sandel'}`}
+                    title="Account Settings"
                   >
-                    <Edit2 size={16} /> Profile Settings
-                  </button>
-                  <button 
-                    onClick={logout}
-                    className="w-full text-left p-3 hover:bg-red-50 font-black uppercase text-sm text-red-600 flex items-center gap-2"
-                  >
-                    <LogOut size={16} /> Logout
+                    <UserIcon size={24} />
                   </button>
                 </div>
+                
+                <AnimatePresence>
+                  {isProfileMenuOpen && (
+                    <>
+                      {/* Backdrop for mobile to close menu on tap outside */}
+                      <div 
+                        className="fixed inset-0 z-40 md:hidden" 
+                        onClick={() => setIsProfileMenuOpen(false)}
+                      />
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10, scale: 0.95, x: '-50%' }}
+                        animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95, x: '-50%' }}
+                        className="absolute left-1/2 top-full mt-2 z-50 bg-white border-4 border-black w-48 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] md:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] md:left-auto md:right-0 md:translate-x-0"
+                      >
+                        <button 
+                          onClick={() => {
+                            setIsProfileModalOpen(true);
+                            setIsProfileMenuOpen(false);
+                          }}
+                          className="w-full text-left p-3 hover:bg-gray-100 font-black uppercase text-sm border-b-4 border-black flex items-center gap-2"
+                        >
+                          <Edit2 size={16} /> Profile Settings
+                        </button>
+                        <button 
+                          onClick={() => {
+                            logout();
+                            setIsProfileMenuOpen(false);
+                          }}
+                          className="w-full text-left p-3 hover:bg-red-50 font-black uppercase text-sm text-red-600 flex items-center gap-2"
+                        >
+                          <LogOut size={16} /> Logout
+                        </button>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           )}
@@ -501,7 +534,7 @@ export default function Dashboard() {
             </h3>
             <div className="h-48 md:h-64 w-full relative">
               <div className="absolute inset-0">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#000" />
                     <XAxis dataKey="name" axisLine={{ strokeWidth: 4 }} tick={{ fontWeight: 'bold' }} />
@@ -528,14 +561,48 @@ export default function Dashboard() {
                 <CalendarIcon /> Activity Log
               </h3>
               <div className="flex gap-2">
-                <div className="relative group">
-                  <div className="neubrutalism-button p-2 cursor-pointer">
+                <div className="relative">
+                  <button 
+                    onClick={() => setIsDownloadMenuOpen(!isDownloadMenuOpen)}
+                    className={`neubrutalism-button p-2 transition-colors ${isDownloadMenuOpen ? 'bg-sandel' : 'bg-white hover:bg-sandel'}`}
+                  >
                     <Download size={20} />
-                  </div>
-                  <div className="absolute right-0 top-full hidden group-hover:block z-10 bg-white border-4 border-black w-32">
-                    <button onClick={() => { setDownloadType('EXCEL'); setIsDownloadModalOpen(true); }} className="w-full text-left p-2 hover:bg-gray-100 font-bold border-b-2 border-black">Excel</button>
-                    <button onClick={() => { setDownloadType('PDF'); setIsDownloadModalOpen(true); }} className="w-full text-left p-2 hover:bg-gray-100 font-bold">PDF</button>
-                  </div>
+                  </button>
+                  
+                  <AnimatePresence>
+                    {isDownloadMenuOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10 md:hidden" onClick={() => setIsDownloadMenuOpen(false)} />
+                        <motion.div 
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 5 }}
+                          className="absolute right-0 top-full mt-1 z-20 bg-white border-4 border-black w-32 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                        >
+                          <button 
+                            onClick={() => { 
+                              setDownloadType('EXCEL'); 
+                              setIsDownloadModalOpen(true); 
+                              setIsDownloadMenuOpen(false);
+                            }} 
+                            className="w-full text-left p-2 hover:bg-gray-100 font-bold border-b-2 border-black"
+                          >
+                            Excel
+                          </button>
+                          <button 
+                            onClick={() => { 
+                              setDownloadType('PDF'); 
+                              setIsDownloadModalOpen(true); 
+                              setIsDownloadMenuOpen(false);
+                            }} 
+                            className="w-full text-left p-2 hover:bg-gray-100 font-bold"
+                          >
+                            PDF
+                          </button>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
             </div>
@@ -564,7 +631,7 @@ export default function Dashboard() {
                       <span className="font-black text-sm">{format(parseISO(log.date), 'MMM dd')} • {log.time}</span>
                     </div>
                     <p className="font-bold text-sm mb-4">{log.description || 'No description provided.'}</p>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button onClick={() => openEditModal(log)} className="neubrutalism-button p-1 text-blue-600"><Edit2 size={14} /></button>
                       <button onClick={() => handleDeleteLog(log.id)} className="neubrutalism-button p-1 text-red-600"><Trash2 size={14} /></button>
                     </div>
@@ -584,7 +651,7 @@ export default function Dashboard() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="neubrutalism-card bg-white w-full max-w-md p-6 md:p-8"
+              className="neubrutalism-card bg-white w-full max-w-md p-6 md:p-8 max-h-[90vh] overflow-y-auto"
             >
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-black uppercase">Profile Settings</h2>
@@ -664,7 +731,7 @@ export default function Dashboard() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="neubrutalism-card bg-white w-full max-w-lg p-6 md:p-8"
+              className="neubrutalism-card bg-white w-full max-w-lg p-6 md:p-8 max-h-[90vh] overflow-y-auto"
             >
               <h2 className="text-3xl font-black uppercase mb-6">Download {downloadType}</h2>
               <p className="font-bold mb-6 opacity-70">Select the date range for your report.</p>
@@ -738,7 +805,7 @@ export default function Dashboard() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="neubrutalism-card bg-white w-full max-w-md p-6 md:p-8"
+              className="neubrutalism-card bg-white w-full max-w-md p-6 md:p-8 max-h-[90vh] overflow-y-auto"
             >
               <h2 className="text-3xl font-black uppercase mb-6">{editingLog ? 'Edit Log' : 'New Entry'}</h2>
               <form onSubmit={handleSaveLog} className="space-y-6">

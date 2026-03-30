@@ -7,7 +7,7 @@ import SunflowerLogo from './components/SunflowerLogo';
 export default function AuthPage() {
   const { login } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
@@ -21,15 +21,26 @@ export default function AuthPage() {
     setLoading(true);
 
     const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
+    const payload = isLogin 
+      ? { identifier, password } 
+      : { email: identifier, password, name, username };
     
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name, username }),
+        body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        console.error('Non-JSON response:', text);
+        throw new Error(`Server error: ${res.status} ${res.statusText}. Please check if the API routes are correctly configured.`);
+      }
 
       if (!res.ok) {
         throw new Error(data.error || 'Something went wrong');
@@ -122,14 +133,16 @@ export default function AuthPage() {
           )}
           
           <div>
-            <label className="block font-black uppercase text-sm mb-2">Email Address</label>
+            <label className="block font-black uppercase text-sm mb-2">
+              {isLogin ? 'Username or Email' : 'Email Address'}
+            </label>
             <input 
-              type="email" 
+              type={isLogin ? 'text' : 'email'} 
               required
               className="neubrutalism-input w-full"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              placeholder={isLogin ? "janedoe or you@example.com" : "you@example.com"}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
             />
           </div>
 
