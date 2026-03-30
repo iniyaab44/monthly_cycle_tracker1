@@ -239,28 +239,33 @@ export default function Dashboard() {
   const renderHeader = () => {
     return (
       <div className="flex flex-col md:flex-row items-center justify-between mb-8 neubrutalism-card p-4 bg-white gap-4">
-        <div className="flex items-center gap-2 md:gap-4">
-          <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="neubrutalism-button p-1 md:p-2">
-            <ChevronLeft size={20} className="md:w-6 md:h-6" />
-          </button>
-          <h2 className="text-lg md:text-2xl font-black uppercase tracking-tighter text-center min-w-[140px] md:min-w-[200px]">
-            {format(currentDate, 'MMMM yyyy')}
-          </h2>
-          <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="neubrutalism-button p-1 md:p-2">
-            <ChevronRight size={20} className="md:w-6 md:h-6" />
-          </button>
-          <button 
-            onClick={() => setCurrentDate(new Date())} 
-            className="neubrutalism-button px-3 py-1 text-xs font-black uppercase bg-gray-100 hover:bg-white transition-colors"
-          >
-            Today
-          </button>
-          <div className="flex items-center gap-1 px-2 py-1 border-2 border-black font-bold text-[10px] uppercase bg-white">
-            <Database size={10} className={dbStatus === 'connected' ? 'text-green-600' : 'text-red-600'} />
-            {dbStatus === 'connected' ? 'DB OK' : 'DB ERR'}
+        <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+          {/* Month Navigation Row */}
+          <div className="flex items-center gap-2 md:gap-4 justify-center">
+            <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="neubrutalism-button p-1 md:p-2">
+              <ChevronLeft size={20} className="md:w-6 md:h-6" />
+            </button>
+            <h2 className="text-lg md:text-2xl font-black uppercase tracking-tighter text-center min-w-[140px] md:min-w-[200px]">
+              {format(currentDate, 'MMMM yyyy')}
+            </h2>
+            <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="neubrutalism-button p-1 md:p-2">
+              <ChevronRight size={20} className="md:w-6 md:h-6" />
+            </button>
           </div>
-        </div>
-        <div className="flex items-center gap-2 md:gap-4 w-full md:w-auto justify-center md:justify-end">
+
+          {/* Today & DB Status Row */}
+          <div className="flex items-center gap-2 justify-center">
+            <button 
+              onClick={() => setCurrentDate(new Date())} 
+              className="neubrutalism-button px-3 py-1 text-xs font-black uppercase bg-gray-100 hover:bg-white transition-colors"
+            >
+              Today
+            </button>
+            <div className="flex items-center gap-1 px-2 py-1 border-2 border-black font-bold text-[10px] uppercase bg-white">
+              <Database size={10} className={dbStatus === 'connected' ? 'text-green-600' : 'text-red-600'} />
+              {dbStatus === 'connected' ? 'DB OK' : 'DB ERR'}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -494,23 +499,25 @@ export default function Dashboard() {
             <h3 className="text-2xl font-black uppercase mb-4 flex items-center gap-2">
               <Activity /> Monthly Overview
             </h3>
-            <div className="h-48 md:h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#000" />
-                  <XAxis dataKey="name" axisLine={{ strokeWidth: 4 }} tick={{ fontWeight: 'bold' }} />
-                  <YAxis axisLine={{ strokeWidth: 4 }} tick={{ fontWeight: 'bold' }} />
-                  <Tooltip 
-                    contentStyle={{ border: '4px solid black', fontWeight: 'bold' }}
-                    cursor={{ fill: 'rgba(0,0,0,0.05)' }}
-                  />
-                  <Bar dataKey="count">
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} stroke="#000" strokeWidth={2} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="h-48 md:h-64 w-full relative">
+              <div className="absolute inset-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#000" />
+                    <XAxis dataKey="name" axisLine={{ strokeWidth: 4 }} tick={{ fontWeight: 'bold' }} />
+                    <YAxis axisLine={{ strokeWidth: 4 }} tick={{ fontWeight: 'bold' }} />
+                    <Tooltip 
+                      contentStyle={{ border: '4px solid black', fontWeight: 'bold' }}
+                      cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                    />
+                    <Bar dataKey="count">
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} stroke="#000" strokeWidth={2} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
 
