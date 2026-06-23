@@ -18,21 +18,47 @@ const __dirname = path.dirname(__filename);
 const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_for_dev";
 const PORT = Number(process.env.PORT) || 3000;
 
-// Supabase Setup with defensive checks
-const supabaseUrl = (process.env.SUPABASE_URL || "").trim().replace(/\/$/, "");
-const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
+// Supabase Setup — try all variable names Vercel integration may inject
+const supabaseUrl = (
+  process.env.SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  ""
+).trim().replace(/\/$/, "");
+
+const supabaseKey = (
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_SECRET_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  ""
+).trim();
+
+// Log startup env state (prefix only — safe for logs)
+console.log("[STARTUP] SUPABASE_URL detected:", supabaseUrl ? supabaseUrl.substring(0, 30) + "..." : "MISSING");
+console.log("[STARTUP] SUPABASE_KEY detected:", supabaseKey ? supabaseKey.substring(0, 10) + "..." : "MISSING");
+console.log("[STARTUP] JWT_SECRET detected:", process.env.JWT_SECRET ? "YES" : "MISSING");
+console.log("[STARTUP] NODE_ENV:", process.env.NODE_ENV);
+console.log("[STARTUP] VERCEL:", process.env.VERCEL || "not set");
 
 let supabase: any = null;
+let supabaseInitError = "";
 
-if (supabaseUrl && supabaseKey) {
+if (!supabaseUrl) {
+  supabaseInitError = "SUPABASE_URL is missing or empty. Check Vercel Environment Variables.";
+  console.error("[STARTUP] CRITICAL:", supabaseInitError);
+} else if (!supabaseKey) {
+  supabaseInitError = "SUPABASE_SERVICE_ROLE_KEY and SUPABASE_ANON_KEY are both missing. Check Vercel Environment Variables.";
+  console.error("[STARTUP] CRITICAL:", supabaseInitError);
+} else if (!supabaseUrl.startsWith('http')) {
+  supabaseInitError = `SUPABASE_URL must start with https://. Got: "${supabaseUrl.substring(0, 15)}..."`;
+  console.error("[STARTUP] CRITICAL:", supabaseInitError);
+} else {
   try {
-    if (supabaseUrl.startsWith('http')) {
-      supabase = createClient(supabaseUrl, supabaseKey);
-    } else {
-      console.error("CRITICAL: SUPABASE_URL must start with http/https. Current value starts with:", supabaseUrl.substring(0, 5));
-    }
-  } catch (err) {
-    console.error("CRITICAL: Failed to initialize Supabase client:", err);
+    supabase = createClient(supabaseUrl, supabaseKey);
+    console.log("[STARTUP] Supabase client initialized successfully.");
+  } catch (err: any) {
+    supabaseInitError = `createClient() threw: ${err.message}`;
+    console.error("[STARTUP] CRITICAL:", supabaseInitError);
   }
 }
 
@@ -44,67 +70,63 @@ app.use(express.json());
 
 // --- API Routes ---
 
-// Health Check (Enhanced for debugging)
+// Health Check — shows exactly which env vars were found and why init failed
 app.get("/api/health", async (req, res) => {
   const debugInfo = {
     timestamp: new Date().toISOString(),
+    supabaseInitialized: !!supabase,
+    supabaseInitError: supabaseInitError || null,
     env: {
-      hasSupabaseUrl: !!process.env.SUPABASE_URL,
-      supabaseUrlLength: process.env.SUPABASE_URL?.length || 0,
-      supabaseUrlPrefix: process.env.SUPABASE_URL?.substring(0, 8),
-      hasSupabaseAnonKey: !!process.env.SUPABASE_ANON_KEY,
-      hasSupabaseServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-      hasJwtSecret: !!process.env.JWT_SECRET,
-      nodeEnv: process.env.NODE_ENV,
-      isVercel: !!process.env.VERCEL
-    },
-    supabaseInitialized: !!supabase
+      // SUPABASE_URL variants
+      SUPABASE_URL:               process.env.SUPABASE_URL               ? process.env.SUPABASE_URL.substring(0, 30) + "..." : "MISSING",
+      NEXT_PUBLIC_SUPABASE_URL:   process.env.NEXT_PUBLIC_SUPABASE_URL   ? "present" : "MISSING",
+      // KEY variants
+      SUPABASE_SERVICE_ROLE_KEY:  process.env.SUPABASE_SERVICE_ROLE_KEY  ? "present" : "MISSING",
+      SUPABASE_SECRET_KEY:        process.env.SUPABASE_SECRET_KEY        ? "present" : "MISSING",
+      SUPABASE_ANON_KEY:          process.env.SUPABASE_ANON_KEY          ? "present" : "MISSING",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "present" : "MISSING",
+      // App vars
+      JWT_SECRET:   process.env.JWT_SECRET   ? "present" : "MISSING",
+      NODE_ENV:     process.env.NODE_ENV,
+      VERCEL:       process.env.VERCEL || "not set",
+    }
   };
 
   try {
     if (!supabase) {
-      return res.json({ 
-        status: "error", 
-        database: "not_initialized", 
-        message: "Supabase client failed to initialize. Check if SUPABASE_URL starts with https://",
+      return res.json({
+        status: "error",
+        database: "not_initialized",
+        message: supabaseInitError || "Supabase client not initialized — check debug info",
         debug: debugInfo
       });
     }
-    
-    // Test the connection with a timeout
+
     const { error } = await supabase.from('users').select('id').limit(1);
-    
+
     if (error) {
-      return res.json({ 
-        status: "warn", 
-        database: "error", 
+      return res.json({
+        status: "warn",
+        database: "error",
         message: error.message,
         code: error.code,
-        debug: debugInfo 
+        debug: debugInfo
       });
     }
-    
-    res.json({ 
-      status: "ok", 
-      database: "connected",
-      debug: debugInfo
-    });
+
+    res.json({ status: "ok", database: "connected", debug: debugInfo });
   } catch (e: any) {
-    res.status(500).json({ 
-      status: "error", 
-      database: "exception", 
-      message: e.message,
-      debug: debugInfo
-    });
+    res.status(500).json({ status: "error", database: "exception", message: e.message, debug: debugInfo });
   }
 });
 
 // Middleware to ensure Supabase is initialized
 const ensureSupabase = (req: any, res: any, next: any) => {
   if (!supabase) {
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: "Server configuration error: Supabase client not initialized.",
-      details: "Please ensure SUPABASE_URL and SUPABASE_ANON_KEY are set in your environment variables (e.g., in Vercel Project Settings)." 
+      initError: supabaseInitError || "Unknown reason",
+      fix: "Visit /api/health for full diagnostics. Ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in Vercel → Project Settings → Environment Variables, then redeploy."
     });
   }
   next();
