@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import cors from "cors";
+import WebSocket from "ws";
 
 // Load environment variables in development
 if (process.env.NODE_ENV !== "production") {
@@ -54,7 +55,16 @@ if (!supabaseUrl) {
   console.error("[STARTUP] CRITICAL:", supabaseInitError);
 } else {
   try {
-    supabase = createClient(supabaseUrl, supabaseKey);
+    supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false
+      },
+      realtime: {
+        transport: WebSocket
+      }
+    });
     console.log("[STARTUP] Supabase client initialized successfully.");
   } catch (err: any) {
     supabaseInitError = `createClient() threw: ${err.message}`;
