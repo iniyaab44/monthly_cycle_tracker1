@@ -1,3 +1,4 @@
+// register and login page 
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
 import { motion } from 'motion/react';
@@ -21,10 +22,10 @@ export default function AuthPage() {
     setLoading(true);
 
     const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-    const payload = isLogin 
-      ? { identifier, password } 
+    const payload = isLogin
+      ? { identifier, password }
       : { email: identifier, password, name, username };
-    
+
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -68,14 +69,14 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 md:p-6 bg-lightyellow">
-      <motion.div 
+      <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         className="auth-card w-full max-w-md md:max-w-[750px]"
       >
         <div className="text-center mb-6 md:mb-10">
           <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tighter mb-2 flex flex-wrap items-center justify-center gap-2 md:gap-3">
-            Monthly 
+            Monthly
             <SunflowerLogo className="w-10 h-10 md:w-16 md:h-16" />
             cycle
           </h1>
@@ -83,13 +84,13 @@ export default function AuthPage() {
         </div>
 
         <div className="flex mb-8 border-4 border-black overflow-hidden">
-          <button 
+          <button
             onClick={() => toggleAuthMode(true)}
             className={`flex-1 py-3 font-black uppercase transition-colors ${isLogin ? 'bg-sandel text-black' : 'bg-white text-black'}`}
           >
             Login
           </button>
-          <button 
+          <button
             onClick={() => toggleAuthMode(false)}
             className={`flex-1 py-3 font-black uppercase transition-colors ${!isLogin ? 'bg-sandel text-black' : 'bg-white text-black'}`}
           >
@@ -108,8 +109,8 @@ export default function AuthPage() {
             <>
               <div>
                 <label className="block font-black uppercase text-sm mb-2">Full Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   required
                   className="neubrutalism-input w-full"
                   placeholder="Jane Doe"
@@ -120,8 +121,8 @@ export default function AuthPage() {
 
               <div>
                 <label className="block font-black uppercase text-sm mb-2">Username</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   required
                   className="neubrutalism-input w-full"
                   placeholder="janedoe123"
@@ -131,13 +132,13 @@ export default function AuthPage() {
               </div>
             </>
           )}
-          
+
           <div>
             <label className="block font-black uppercase text-sm mb-2">
               {isLogin ? 'Username or Email' : 'Email Address'}
             </label>
-            <input 
-              type={isLogin ? 'text' : 'email'} 
+            <input
+              type={isLogin ? 'text' : 'email'}
               required
               className="neubrutalism-input w-full"
               placeholder={isLogin ? "janedoe or you@example.com" : "you@example.com"}
@@ -149,8 +150,8 @@ export default function AuthPage() {
           <div>
             <label className="block font-black uppercase text-sm mb-2">Password</label>
             <div className="relative">
-              <input 
-                type={showPassword ? 'text' : 'password'} 
+              <input
+                type={showPassword ? 'text' : 'password'}
                 required
                 className="neubrutalism-input w-full pr-12"
                 placeholder="••••••••"
@@ -169,8 +170,8 @@ export default function AuthPage() {
 
           {isLogin && (
             <div className="text-right">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => alert('Please contact support at sandramleotwe@gmail.com to reset your password.')}
                 className="text-xs font-bold uppercase hover:underline opacity-60"
               >
@@ -179,8 +180,8 @@ export default function AuthPage() {
             </div>
           )}
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading}
             className="neubrutalism-button w-full bg-sandel text-black flex items-center justify-center gap-2 py-4 text-xl disabled:opacity-50 mt-4"
           >

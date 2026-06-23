@@ -1,30 +1,31 @@
+// page to enter tracker data after register or login
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
-import { 
-  format, 
-  addMonths, 
-  subMonths, 
-  startOfMonth, 
-  endOfMonth, 
-  startOfWeek, 
-  endOfWeek, 
-  isSameMonth, 
-  isSameDay, 
-  addDays, 
+import {
+  format,
+  addMonths,
+  subMonths,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  isSameMonth,
+  isSameDay,
+  addDays,
   parseISO,
   isWithinInterval,
   startOfMonth as startOfMonthFn,
   endOfMonth as endOfMonthFn,
   isValid
 } from 'date-fns';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Plus, 
-  Search, 
-  Download, 
-  LogOut, 
-  Activity, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Search,
+  Download,
+  LogOut,
+  Activity,
   Calendar as CalendarIcon,
   Trash2,
   Edit2,
@@ -81,6 +82,16 @@ export default function Dashboard() {
     endYear: format(new Date(), 'yyyy'),
   });
 
+  // Delete Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteRange, setDeleteRange] = useState({
+    startMonth: format(new Date(), 'MM'),
+    startYear: format(new Date(), 'yyyy'),
+    endMonth: format(new Date(), 'MM'),
+    endYear: format(new Date(), 'yyyy'),
+  });
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const months = [
     { value: '01', label: 'January' },
     { value: '02', label: 'February' },
@@ -101,7 +112,7 @@ export default function Dashboard() {
   const fetchJson = async (url: string, options: RequestInit = {}) => {
     const res = await fetch(url, options);
     const contentType = res.headers.get('content-type');
-    
+
     if (contentType && contentType.includes('application/json')) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `Server error: ${res.status}`);
@@ -131,8 +142,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user) {
-      setProfileFormData(prev => ({ 
-        ...prev, 
+      setProfileFormData(prev => ({
+        ...prev,
         email: user.email,
         name: user.name || '',
         username: user.username || ''
@@ -273,8 +284,8 @@ export default function Dashboard() {
 
           {/* Today & DB Status Row */}
           <div className="flex items-center gap-2 justify-center">
-            <button 
-              onClick={() => setCurrentDate(new Date())} 
+            <button
+              onClick={() => setCurrentDate(new Date())}
               className="neubrutalism-button px-3 py-1 text-xs font-black uppercase bg-gray-100 hover:bg-white transition-colors"
             >
               Today
@@ -319,7 +330,7 @@ export default function Dashboard() {
         const cloneDay = day;
         const dayLogs = logs.filter(l => isSameDay(parseISO(l.date), cloneDay));
         const isToday = isSameDay(day, new Date());
-        
+
         days.push(
           <div
             key={day.toString()}
@@ -336,8 +347,8 @@ export default function Dashboard() {
             <span className="font-black text-sm md:text-lg">{formattedDate}</span>
             <div className="flex flex-col gap-0.5 md:gap-1 mt-0.5 md:mt-1">
               {dayLogs.map(log => (
-                <div 
-                  key={log.id} 
+                <div
+                  key={log.id}
                   className={cn("text-[8px] md:text-[10px] font-bold px-0.5 md:px-1 border border-black md:border-2 truncate cursor-pointer", STATUS_COLORS[log.status])}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -370,7 +381,7 @@ export default function Dashboard() {
     { name: 'Free', count: currentMonthLogs.filter(l => l.status === 'Free').length, color: '#4CAF50' },
   ];
 
-  const filteredLogs = currentMonthLogs.filter(l => 
+  const filteredLogs = currentMonthLogs.filter(l =>
     l.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
     l.status.toLowerCase().includes(searchQuery.toLowerCase()) ||
     l.date.includes(searchQuery)
@@ -380,7 +391,7 @@ export default function Dashboard() {
     const doc = new jsPDF();
     doc.setFontSize(20);
     doc.text(`Cycle Report - ${rangeLabel}`, 14, 22);
-    
+
     const tableData = filteredLogs.map(l => [
       format(parseISO(l.date), 'MMM dd, yyyy'),
       l.status,
@@ -413,6 +424,48 @@ export default function Dashboard() {
     XLSX.writeFile(workbook, `cycle-report-${rangeLabel.replace(/ /g, '-')}.xlsx`);
   };
 
+  const handleDeleteSubmit = async () => {
+    const startDate = startOfMonthFn(new Date(parseInt(deleteRange.startYear), parseInt(deleteRange.startMonth) - 1));
+    const endDate = endOfMonthFn(new Date(parseInt(deleteRange.endYear), parseInt(deleteRange.endMonth) - 1));
+
+    if (!isValid(startDate) || !isValid(endDate)) {
+      alert('Invalid date range selected.');
+      return;
+    }
+
+    const toDelete = logs.filter(l => {
+      const logDate = parseISO(l.date);
+      return isWithinInterval(logDate, { start: startDate, end: endDate });
+    });
+
+    if (toDelete.length === 0) {
+      alert('No logs found in the selected date range.');
+      return;
+    }
+
+    const rangeLabel = `${months.find(m => m.value === deleteRange.startMonth)?.label} ${deleteRange.startYear} to ${months.find(m => m.value === deleteRange.endMonth)?.label} ${deleteRange.endYear}`;
+    const confirmed = window.confirm(`Are you sure you want to permanently delete ${toDelete.length} log(s) from ${rangeLabel}? This action cannot be undone.`);
+    if (!confirmed) return;
+
+    setDeleteLoading(true);
+    try {
+      for (const log of toDelete) {
+        await fetchJson(`/api/logs/${log.id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+      await fetchLogs();
+      setIsDeleteModalOpen(false);
+      alert(`Successfully deleted ${toDelete.length} log(s).`);
+    } catch (err) {
+      console.error('Error deleting logs:', err);
+      alert('An error occurred while deleting logs. Please try again.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const handleDownloadSubmit = () => {
     const startDate = startOfMonthFn(new Date(parseInt(range.startYear), parseInt(range.startMonth) - 1));
     const endDate = endOfMonthFn(new Date(parseInt(range.endYear), parseInt(range.endMonth) - 1));
@@ -443,7 +496,7 @@ export default function Dashboard() {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tighter mb-2 flex flex-wrap items-center gap-2 md:gap-4">
-              Monthly 
+              Monthly
               <SunflowerLogo className="w-12 h-12 md:w-20 md:h-20" />
               cycle
             </h1>
@@ -457,7 +510,7 @@ export default function Dashboard() {
               </div>
               <div className="relative">
                 <div className="flex justify-center">
-                  <button 
+                  <button
                     onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
                     className={`neubrutalism-button p-3 transition-colors ${isProfileMenuOpen ? 'bg-sandel' : 'bg-white hover:bg-sandel'}`}
                     title="Account Settings"
@@ -465,22 +518,22 @@ export default function Dashboard() {
                     <UserIcon size={24} />
                   </button>
                 </div>
-                
+
                 <AnimatePresence>
                   {isProfileMenuOpen && (
                     <>
                       {/* Backdrop for mobile to close menu on tap outside */}
-                      <div 
-                        className="fixed inset-0 z-40 md:hidden" 
+                      <div
+                        className="fixed inset-0 z-40 md:hidden"
                         onClick={() => setIsProfileMenuOpen(false)}
                       />
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 10, scale: 0.95, x: '-50%' }}
                         animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
                         exit={{ opacity: 0, y: 10, scale: 0.95, x: '-50%' }}
                         className="absolute left-1/2 top-full mt-2 z-50 bg-white border-4 border-black w-48 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] md:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] md:left-auto md:right-0 md:translate-x-0"
                       >
-                        <button 
+                        <button
                           onClick={() => {
                             setIsProfileModalOpen(true);
                             setIsProfileMenuOpen(false);
@@ -489,7 +542,7 @@ export default function Dashboard() {
                         >
                           <Edit2 size={16} /> Profile Settings
                         </button>
-                        <button 
+                        <button
                           onClick={() => {
                             logout();
                             setIsProfileMenuOpen(false);
@@ -546,7 +599,7 @@ export default function Dashboard() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#000" />
                     <XAxis dataKey="name" axisLine={{ strokeWidth: 4 }} tick={{ fontWeight: 'bold' }} />
                     <YAxis axisLine={{ strokeWidth: 4 }} tick={{ fontWeight: 'bold' }} />
-                    <Tooltip 
+                    <Tooltip
                       contentStyle={{ border: '4px solid black', fontWeight: 'bold' }}
                       cursor={{ fill: 'rgba(0,0,0,0.05)' }}
                     />
@@ -568,40 +621,50 @@ export default function Dashboard() {
                 <CalendarIcon /> Activity Log
               </h3>
               <div className="flex gap-2">
+                {/* Delete Button */}
+                <button
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  className="neubrutalism-button p-2 transition-colors bg-white hover:bg-red-100 text-red-600"
+                  title="Delete logs by date range"
+                >
+                  <Trash2 size={20} />
+                </button>
+
+                {/* Download Button */}
                 <div className="relative">
-                  <button 
+                  <button
                     onClick={() => setIsDownloadMenuOpen(!isDownloadMenuOpen)}
                     className={`neubrutalism-button p-2 transition-colors ${isDownloadMenuOpen ? 'bg-sandel' : 'bg-white hover:bg-sandel'}`}
                   >
                     <Download size={20} />
                   </button>
-                  
+
                   <AnimatePresence>
                     {isDownloadMenuOpen && (
                       <>
                         <div className="fixed inset-0 z-10 md:hidden" onClick={() => setIsDownloadMenuOpen(false)} />
-                        <motion.div 
+                        <motion.div
                           initial={{ opacity: 0, y: 5 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: 5 }}
                           className="absolute right-0 top-full mt-1 z-20 bg-white border-4 border-black w-32 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
                         >
-                          <button 
-                            onClick={() => { 
-                              setDownloadType('EXCEL'); 
-                              setIsDownloadModalOpen(true); 
+                          <button
+                            onClick={() => {
+                              setDownloadType('EXCEL');
+                              setIsDownloadModalOpen(true);
                               setIsDownloadMenuOpen(false);
-                            }} 
+                            }}
                             className="w-full text-left p-2 hover:bg-gray-100 font-bold border-b-2 border-black"
                           >
                             Excel
                           </button>
-                          <button 
-                            onClick={() => { 
-                              setDownloadType('PDF'); 
-                              setIsDownloadModalOpen(true); 
+                          <button
+                            onClick={() => {
+                              setDownloadType('PDF');
+                              setIsDownloadModalOpen(true);
                               setIsDownloadMenuOpen(false);
-                            }} 
+                            }}
                             className="w-full text-left p-2 hover:bg-gray-100 font-bold"
                           >
                             PDF
@@ -616,9 +679,9 @@ export default function Dashboard() {
 
             <div className="relative mb-4">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input 
-                type="text" 
-                placeholder="Search logs..." 
+              <input
+                type="text"
+                placeholder="Search logs..."
                 className="neubrutalism-input w-full pl-10"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -654,7 +717,7 @@ export default function Dashboard() {
       <AnimatePresence>
         {isProfileModalOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
@@ -662,7 +725,7 @@ export default function Dashboard() {
             >
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-black uppercase">Profile Settings</h2>
-                <button 
+                <button
                   onClick={() => setIsProfileModalOpen(false)}
                   className="neubrutalism-button p-2 bg-gray-100"
                 >
@@ -680,8 +743,8 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block font-black uppercase text-sm mb-2">Full Name</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       required
                       className="neubrutalism-input w-full"
                       value={profileFormData.name}
@@ -691,8 +754,8 @@ export default function Dashboard() {
 
                   <div>
                     <label className="block font-black uppercase text-sm mb-2">Username</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       required
                       className="neubrutalism-input w-full"
                       value={profileFormData.username}
@@ -703,8 +766,8 @@ export default function Dashboard() {
 
                 <div>
                   <label className="block font-black uppercase text-sm mb-2">Email Address</label>
-                  <input 
-                    type="email" 
+                  <input
+                    type="email"
                     required
                     className="neubrutalism-input w-full"
                     value={profileFormData.email}
@@ -715,8 +778,8 @@ export default function Dashboard() {
                 <div>
                   <div className="flex justify-between items-center mb-2">
                     <label className="block font-black uppercase text-sm">New Password (leave blank to keep current)</label>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       onClick={() => alert('Please contact support at sandramleotwe@gmail.com to reset your password.')}
                       className="text-[10px] font-bold uppercase hover:underline opacity-60"
                     >
@@ -724,8 +787,8 @@ export default function Dashboard() {
                     </button>
                   </div>
                   <div className="relative">
-                    <input 
-                      type={showProfilePassword ? 'text' : 'password'} 
+                    <input
+                      type={showProfilePassword ? 'text' : 'password'}
                       className="neubrutalism-input w-full pr-12"
                       placeholder="••••••••"
                       value={profileFormData.password}
@@ -741,8 +804,8 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={profileLoading}
                   className="neubrutalism-button w-full bg-sandel text-black flex items-center justify-center gap-2 py-4 text-xl disabled:opacity-50"
                 >
@@ -758,7 +821,7 @@ export default function Dashboard() {
       <AnimatePresence>
         {isDownloadModalOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
@@ -766,19 +829,19 @@ export default function Dashboard() {
             >
               <h2 className="text-3xl font-black uppercase mb-6">Download {downloadType}</h2>
               <p className="font-bold mb-6 opacity-70">Select the date range for your report.</p>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 <div className="space-y-4">
                   <h4 className="font-black uppercase text-sm border-b-2 border-black pb-1">From</h4>
                   <div className="grid grid-cols-2 gap-2">
-                    <select 
+                    <select
                       className="neubrutalism-input w-full"
                       value={range.startMonth}
                       onChange={(e) => setRange({ ...range, startMonth: e.target.value })}
                     >
                       {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                     </select>
-                    <select 
+                    <select
                       className="neubrutalism-input w-full"
                       value={range.startYear}
                       onChange={(e) => setRange({ ...range, startYear: e.target.value })}
@@ -791,14 +854,14 @@ export default function Dashboard() {
                 <div className="space-y-4">
                   <h4 className="font-black uppercase text-sm border-b-2 border-black pb-1">To</h4>
                   <div className="grid grid-cols-2 gap-2">
-                    <select 
+                    <select
                       className="neubrutalism-input w-full"
                       value={range.endMonth}
                       onChange={(e) => setRange({ ...range, endMonth: e.target.value })}
                     >
                       {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                     </select>
-                    <select 
+                    <select
                       className="neubrutalism-input w-full"
                       value={range.endYear}
                       onChange={(e) => setRange({ ...range, endYear: e.target.value })}
@@ -810,13 +873,13 @@ export default function Dashboard() {
               </div>
 
               <div className="flex gap-4">
-                <button 
+                <button
                   onClick={() => setIsDownloadModalOpen(false)}
                   className="neubrutalism-button flex-1 bg-gray-100"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   onClick={handleDownloadSubmit}
                   className="neubrutalism-button flex-1 bg-sandel"
                 >
@@ -828,11 +891,102 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
+      {/* Delete Range Modal */}
+      <AnimatePresence>
+        {isDeleteModalOpen && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="neubrutalism-card bg-white w-full max-w-lg p-6 md:p-8 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-black uppercase flex items-center gap-2">
+                  <Trash2 className="text-red-600" /> Delete Logs
+                </h2>
+                <button
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  className="neubrutalism-button p-2 bg-gray-100"
+                >
+                  <Plus className="rotate-45" size={20} />
+                </button>
+              </div>
+
+              <div className="bg-red-50 border-4 border-red-500 p-3 mb-6">
+                <p className="font-bold text-red-700 text-sm">⚠️ This will permanently delete all logs in the selected date range. Only your own data will be affected.</p>
+              </div>
+
+              <p className="font-bold mb-6 opacity-70">Select the date range of logs to delete.</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div className="space-y-4">
+                  <h4 className="font-black uppercase text-sm border-b-2 border-black pb-1">From</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      className="neubrutalism-input w-full"
+                      value={deleteRange.startMonth}
+                      onChange={(e) => setDeleteRange({ ...deleteRange, startMonth: e.target.value })}
+                    >
+                      {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                    <select
+                      className="neubrutalism-input w-full"
+                      value={deleteRange.startYear}
+                      onChange={(e) => setDeleteRange({ ...deleteRange, startYear: e.target.value })}
+                    >
+                      {years.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="font-black uppercase text-sm border-b-2 border-black pb-1">To</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      className="neubrutalism-input w-full"
+                      value={deleteRange.endMonth}
+                      onChange={(e) => setDeleteRange({ ...deleteRange, endMonth: e.target.value })}
+                    >
+                      {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                    <select
+                      className="neubrutalism-input w-full"
+                      value={deleteRange.endYear}
+                      onChange={(e) => setDeleteRange({ ...deleteRange, endYear: e.target.value })}
+                    >
+                      {years.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  disabled={deleteLoading}
+                  className="neubrutalism-button flex-1 bg-gray-100 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteSubmit}
+                  disabled={deleteLoading}
+                  className="neubrutalism-button flex-1 bg-red-500 text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {deleteLoading ? 'Deleting...' : (<><Trash2 size={16} /> Delete</>)}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Entry Modal */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
@@ -842,8 +996,8 @@ export default function Dashboard() {
               <form onSubmit={handleSaveLog} className="space-y-6">
                 <div>
                   <label className="block font-black uppercase text-sm mb-2">Date</label>
-                  <input 
-                    type="date" 
+                  <input
+                    type="date"
                     required
                     className="neubrutalism-input w-full"
                     value={formData.date}
@@ -853,7 +1007,7 @@ export default function Dashboard() {
 
                 <div>
                   <label className="block font-black uppercase text-sm mb-2">Status</label>
-                  <select 
+                  <select
                     className="neubrutalism-input w-full font-bold"
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as LogStatus })}
@@ -867,7 +1021,7 @@ export default function Dashboard() {
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className="block font-black uppercase text-sm mb-2">Hour</label>
-                    <select 
+                    <select
                       className="neubrutalism-input w-full font-bold"
                       value={formData.hour}
                       onChange={(e) => setFormData({ ...formData, hour: e.target.value })}
@@ -879,7 +1033,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <label className="block font-black uppercase text-sm mb-2">Min</label>
-                    <select 
+                    <select
                       className="neubrutalism-input w-full font-bold"
                       value={formData.minute}
                       onChange={(e) => setFormData({ ...formData, minute: e.target.value })}
@@ -891,7 +1045,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <label className="block font-black uppercase text-sm mb-2">AM/PM</label>
-                    <select 
+                    <select
                       className="neubrutalism-input w-full font-bold"
                       value={formData.ampm}
                       onChange={(e) => setFormData({ ...formData, ampm: e.target.value })}
@@ -904,7 +1058,7 @@ export default function Dashboard() {
 
                 <div>
                   <label className="block font-black uppercase text-sm mb-2">Notes</label>
-                  <textarea 
+                  <textarea
                     className="neubrutalism-input w-full h-24 resize-none"
                     placeholder="Symptoms, mood, etc..."
                     value={formData.description}
@@ -913,7 +1067,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="flex gap-4 pt-4">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => {
                       setIsModalOpen(false);
@@ -923,7 +1077,7 @@ export default function Dashboard() {
                   >
                     Cancel
                   </button>
-                  <button 
+                  <button
                     type="submit"
                     className="neubrutalism-button flex-1 bg-sandel text-black"
                   >
