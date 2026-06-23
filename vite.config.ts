@@ -8,13 +8,16 @@ export default defineConfig(({mode}) => {
   return {
     plugins: [react(), tailwindcss()],
     build: {
+      chunkSizeWarningLimit: 1000, // raise limit to 1000 KB (default is 500 KB)
       rollupOptions: {
         output: {
           manualChunks: {
-            'vendor-react': ['react', 'react-dom'],
-            'vendor-ui': ['lucide-react', 'motion'],
+            'vendor-react':  ['react', 'react-dom'],
+            'vendor-ui':     ['lucide-react', 'motion'],
             'vendor-charts': ['recharts'],
-            'vendor-utils': ['jspdf', 'xlsx', 'date-fns'],
+            'vendor-pdf':    ['jspdf', 'jspdf-autotable'],
+            'vendor-excel':  ['xlsx'],
+            'vendor-dates':  ['date-fns'],
           },
         },
       },
